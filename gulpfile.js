@@ -7,11 +7,16 @@ var
     del = require( 'del' ),
     destclean = require( 'gulp-dest-clean' ),
     imacss = require( 'gulp-imacss' ),
-    sass = require( 'gulp-sass' );
+    sass = require( 'gulp-sass' ),
+    preprocess = require( 'gulp-preprocess' ),
+    pkg = require( './package.json' ),
+    htmlclean = require( 'gulp-htmlclean' ),
+    browsersync = require( 'browser-sync');
 
 
 // Définition de quelques varaibles générales pour notre gulpfile
 var
+    devBuild = ((process.env.NODE_ENV || 'development').trim().toLowerCase() !== 'production'), //true = mode development! Savoir si oui on non on est en production
     source = 'source/',
     dest = 'build/';
 
@@ -37,6 +42,24 @@ var
             precision: 3,
             errLogToConsole: true
         }
+    },
+    html = {
+        in: source + '*.html',
+        watch: [source + '*.html', source + 'template/**/*'],
+        out: dest,
+        context: {
+            devBuild: devBuild,
+            author: pkg.author,
+            version: pkg.version
+        }
+    },
+    syncOpts = {
+        server: {
+            baseDir: dest,
+            index: 'index.html'
+        },
+        open: false,
+        notify: true
     };
 
 // Défintion des tâches
@@ -66,11 +89,32 @@ gulp.task('imageuri', function(){
 gulp.task('sass', function(){
     return gulp.src(css.in)
         .pipe(sass(css.sassOpts))
-        .pipe(gulp.dest(css.out));
+        .pipe(gulp.dest(css.out))
+        .pipe(browsersync.reload({stream: true}));
+});
+
+gulp.task('html', function(){
+    var page = gulp.src(html.in).pipe(preprocess({context: html.context}));
+    if (!devBuild) {
+
+        page = page
+            .pipe(size({title: 'HTML avant minification:'}))
+            .pipe(htmlclean())
+            .pipe(size({title: 'HTML après minification:'}))
+    };
+    return page.pipe(gulp.dest(html.out));
+
+});
+
+gulp.task('browsersync', function(){
+    browsersync(syncOpts);
 })
 //Tâche par défault qui sera exécutée lorsque l'on tape gulp dans le terminal
-gulp.task('default', ['images'], function(){
+gulp.task('default', ['images', 'sass', 'html', 'browsersync'], function(){
+    gulp.watch(html.watch, ['html', browsersync.reload]);
     gulp.watch(imageOpts.watch, ['images']);
+    gulp.watch(css.watch, ['sass']);
+
 });
 
 
